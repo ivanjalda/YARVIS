@@ -42,7 +42,14 @@ Necesitas 4 llaves. Ve guardándolas en una nota del móvil.
 
 ## Paso 5 — Subir el motor a GitHub
 
-Ya está hecho: el motor está en **github.com/ivanjalda/motor**.
+1. Entra en **github.com/new**
+2. Nombre: `motor` · Marca **Public** · Pulsa **Create repository**.
+3. Pulsa **uploading an existing file**.
+4. Arrastra **todo el contenido** de la carpeta `motor` (incluida la carpeta `.github`).
+   - Si la carpeta `.github` no aparece en tu ordenador, haz esto después:
+     **Add file → Create new file**, en el nombre escribe `.github/workflows/motor.yml`
+     y pega dentro el contenido de ese archivo.
+5. Pulsa **Commit changes**.
 
 ## Paso 6 — Guardar las 4 llaves
 
