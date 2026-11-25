@@ -1,0 +1,9 @@
+{
+  "modelo": "gemini-flash-latest",
+  "ideas_por_dia": 4,
+  "empresa": {
+    "nombre": "Community16 LLC",
+    "direccion": "500 4th St NW, Suite 102 #1327, Albuquerque, NM 87102, USA",
+    "correo": "community16jalda@gmail.com"
+  }
+}
