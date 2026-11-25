@@ -1,0 +1,32 @@
+name: Prueba
+on:
+  workflow_dispatch:
+jobs:
+  prueba:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comprobar llaves
+        env:
+          TG: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          GK: ${{ secrets.GEMINI_API_KEY }}
+          CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python3 - <<'EOF'
+          import json, os, urllib.request
+          def get(u, h=None):
+              try:
+                  r = urllib.request.urlopen(urllib.request.Request(u, headers=h or {}), timeout=30)
+                  return r.status, json.loads(r.read())
+              except urllib.error.HTTPError as e:
+                  return e.code, {}
+          tg = os.environ["TG"].strip()
+          s, d = get(f"https://api.telegram.org/bot{tg}/getMe")
+          print("BOT:", s, d.get("result", {}).get("username"))
+          s, d = get(f"https://api.telegram.org/bot{tg}/getWebhookInfo")
+          print("WEBHOOK puesto:", bool(d.get("result", {}).get("url")))
+          s, d = get(f"https://api.telegram.org/bot{tg}/getUpdates?timeout=0")
+          print("MENSAJES:", s, len(d.get("result", [])), d.get("description"))
+          print("CHAT largo:", len(os.environ["CHAT"].strip()))
+          s, d = get("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200", {"x-goog-api-key": os.environ["GK"].strip()})
+          print("GEMINI:", s, [m["name"] for m in d.get("models", []) if "flash" in m["name"]][:12])
+          EOF
