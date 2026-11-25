@@ -3,11 +3,12 @@ name: Motor
 on:
   schedule:
     - cron: "*/10 * * * *"   # escucha Telegram cada 10 minutos
-    - cron: "5 7 * * *"      # ideas del día (8:05 en España en invierno)
+    - cron: "5 7 * * *"      # mañana: ideas, publicación y sueño (8:05 en España en invierno)
+    - cron: "30 21 * * *"    # noche: estrés del día (22:30 en España en invierno)
   workflow_dispatch:
     inputs:
       accion:
-        description: "escuchar o ideas"
+        description: "escuchar, manana o noche"
         default: "escuchar"
 
 concurrency:
@@ -17,14 +18,18 @@ concurrency:
 jobs:
   motor:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+      - name: Preparar
+        run: pip install --quiet cryptography
       - name: Trabajar
         run: python3 motor.py "$ACCION"
         env:
-          ACCION: ${{ github.event.schedule == '5 7 * * *' && 'ideas' || github.event.inputs.accion || 'escuchar' }}
+          ACCION: ${{ github.event.schedule == '5 7 * * *' && 'manana' || github.event.schedule == '30 21 * * *' && 'noche' || github.event.inputs.accion || 'escuchar' }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          PANEL_CLAVE: ${{ secrets.PANEL_CLAVE }}
+          STRIPE_KEY: ${{ secrets.STRIPE_KEY }}
