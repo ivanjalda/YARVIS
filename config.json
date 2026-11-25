@@ -4,11 +4,27 @@
   "empresa": {
     "nombre": "Community16 LLC",
     "direccion": "500 4th St NW, Suite 102 #1327, Albuquerque, NM 87102, USA",
-    "correo": "community16jalda@gmail.com"
+    "correo": "community16jalda@gmail.com",
+    "telefono": "+1 505 437 5675",
+    "notas": [
+      "Community16 LLC es una sociedad de Nuevo México (EE. UU.) creada en junio de 2023; Iván Jalda es su único miembro.",
+      "Todas las webs, tiendas y proyectos del dueño pertenecen a Community16 LLC y cobran con la misma cuenta de Stripe."
+    ]
   },
   "marca": {
     "persona": "Iván J. Valmont, emprendedor que construye sus negocios online desde cero",
     "historia": "Empezó sin nada y está levantando con disciplina una red de webs, tiendas y proyectos con el objetivo de llegar muy lejos. Pone a Dios por encima de todo y comparte su camino de crecimiento personal.",
     "tono": "cercano, humilde, con fe y mucha fuerza; inspira a otros a empezar aunque no tengan nada; nunca arrogante"
+  },
+  "dueno": {
+    "datos": [
+      "El dueño se llama Iván. Escribe en español rápido y a veces con faltas: entiende siempre lo que quiere decir, no la letra exacta.",
+      "No es programador y no entiende inglés: háblale muy sencillo, en español, sin tecnicismos.",
+      "Quiere soluciones en positivo; nunca le contestes que algo no se puede: ofrece la mejor forma de conseguirlo.",
+      "Prefiere recibir las cosas completas y terminadas de una vez.",
+      "Su objetivo es facturar mucho con todo automatizado y llegar algún día a cotizar en bolsa.",
+      "Cuando comparte una idea nueva, quiere usarla para mejorar sus webs y tiendas que ya existen, no siempre crear webs nuevas.",
+      "Si menciona una web que ya existe (aunque la escriba mal), búscala en su lista de webs y trabaja sobre esa."
+    ]
   }
 }

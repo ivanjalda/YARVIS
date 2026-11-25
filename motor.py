@@ -300,7 +300,12 @@ def pedir_permiso(est, propuesta):
 def empresa_txt():
     e = CONFIG.get("empresa", {})
     return (f"Empresa propietaria: {e.get('nombre', '')}. Dirección: {e.get('direccion', '')}. "
-            f"Correo de contacto: {e.get('correo', '')}.")
+            f"Correo de contacto: {e.get('correo', '')}. Teléfono: {e.get('telefono', '')}.")
+
+
+def contexto():
+    datos = CONFIG.get("dueno", {}).get("datos", []) + CONFIG.get("empresa", {}).get("notas", [])
+    return "SOBRE EL DUEÑO Y SU EMPRESA (tenlo siempre en cuenta):\n" + "\n".join(f"- {x}" for x in datos)
 
 
 REGLAS = """Eres el director digital de un negocio online. Objetivo: facturar más.
@@ -337,6 +342,7 @@ def crear_web(p):
     if s == 200:
         nombre = f"{nombre}-{ahora().strftime('%m%d%H%M')}"
     pedido = f"""{REGLAS}
+{contexto()}
 {empresa_txt()}
 
 Crea una web completa y lista para publicar en GitHub Pages.
@@ -396,6 +402,7 @@ def mejorar_web(p, est):
         raise RuntimeError(f"{archivo} es muy grande: pídeme el cambio por partes "
                            "(por ejemplo, solo la portada) y lo hago.")
     pedido = f"""{REGLAS}
+{contexto()}
 {empresa_txt()}
 
 Este es el archivo "{archivo}" de la web "{repo}":
@@ -440,6 +447,7 @@ def ideas(est):
     ya = "\n".join(f"- {p.get('resumen', '')}" for p in est["pendientes"].values()) or "(nada)"
     n = int(CONFIG.get("ideas_por_dia", 4))
     pedido = f"""{REGLAS}
+{contexto()}
 
 Mis webs:
 {texto_webs(webs)}
@@ -702,6 +710,7 @@ def entender(texto, est):
     webs = mis_webs()
     charla = "\n".join(f"{c['quien']}: {c['texto']}" for c in est["charla"][-10:])
     pedido = f"""{REGLAS}
+{contexto()}
 
 Mis webs (nombre exacto del repositorio: descripción):
 {texto_webs(webs)}
