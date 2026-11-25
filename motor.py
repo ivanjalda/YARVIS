@@ -200,6 +200,7 @@ def guardar_estado(est, original):
     nuevo = json.dumps(est, ensure_ascii=False, indent=1)
     if nuevo != original:
         escribir(memoria(), "estado.json", nuevo, "memoria")
+    return nuevo
 
 
 # ---------------------------------------------------------------- Gemini
@@ -266,7 +267,7 @@ def quitar_vallas(txt):
 
 # ---------------------------------------------------------------- Telegram
 def tg(metodo, datos):
-    s, d = http("POST", f"https://api.telegram.org/bot{TG_TOKEN}/{metodo}", datos, espera=60)
+    s, d = http("POST", f"https://api.telegram.org/bot{TG_TOKEN}/{metodo}", datos, espera=80)
     if s != 200:
         print("Aviso de Telegram:", metodo, s, str(d.get("description", ""))[:120])
     return d
@@ -702,7 +703,7 @@ Cada mañana te preparo una.
 
 📲 /panel – enlace a tu panel (web y app)
 
-Reviso tus mensajes cada 10 minutos más o menos.
+Te contesto en un minuto como mucho.
 Nada se publica sin que pulses ✅."""
 
 
@@ -776,8 +777,8 @@ def boton(est, c):
         nueva_publicacion(est)
 
 
-def escuchar(est):
-    datos = tg("getUpdates", {"offset": est["offset"], "timeout": 0,
+def escuchar(est, espera=0):
+    datos = tg("getUpdates", {"offset": est["offset"], "timeout": espera,
                               "allowed_updates": ["message", "callback_query"]})
     for u in datos.get("result", []):
         est["offset"] = u["update_id"] + 1
@@ -838,35 +839,74 @@ def escuchar(est):
 
 
 # ================================================================ ARRANQUE
+def manana(est):
+    preguntar_sueno()
+    leer_stripe(est)
+    for tarea in (ideas, nueva_publicacion):
+        try:
+            tarea(est)
+        except Exception as e:
+            enviar(f"⚠️ {e}")
+    if MOTOR_REPO:  # señal de vida para que GitHub mantenga el motor encendido
+        escribir(MOTOR_REPO, "latido.txt", ahora().isoformat(), "latido")
+
+
+def tareas_del_dia(est):
+    h, dia = ahora(), hoy()
+    marcas = est.setdefault("marcas", {})
+    if h.hour >= 8 and marcas.get("manana") != dia:
+        marcas["manana"] = dia
+        manana(est)
+    if (h.hour, h.minute) >= (22, 30) and marcas.get("noche") != dia:
+        marcas["noche"] = dia
+        leer_stripe(est)
+        preguntar_estres()
+
+
+def relanzar():
+    """Antes de acabar su turno, el motor se vuelve a encender a sí mismo."""
+    if MOTOR_REPO:
+        s, d = gh("POST", f"/repos/{MOTOR_REPO}/actions/workflows/motor.yml/dispatches",
+                  {"ref": "main", "inputs": {"accion": "vigilar"}})
+        print("Relanzado:", s)
+
+
 def main():
+    global _WEBS
     faltan = [n for n, v in (("GEMINI_API_KEY", GEMINI_KEY), ("TELEGRAM_BOT_TOKEN", TG_TOKEN),
                              ("TELEGRAM_CHAT_ID", TG_CHAT), ("GH_TOKEN", GH_TOKEN)) if not v]
     if faltan:
         print("Faltan estas claves en Secrets:", ", ".join(faltan))
         sys.exit(1)
-    accion = (sys.argv[1] if len(sys.argv) > 1 else "escuchar").strip().lower()
+    accion = (sys.argv[1] if len(sys.argv) > 1 else "vigilar").strip().lower()
     est, original = cargar_estado()
+    if accion in ("manana", "ideas"):
+        est.setdefault("marcas", {})["manana"] = hoy()
+        try:
+            manana(est)
+        except Exception as e:
+            enviar(f"⚠️ {e}")
+    inicio, webs_hora = time.time(), time.time()
     try:
-        escuchar(est)
-        if accion in ("manana", "ideas"):
-            preguntar_sueno()
-            leer_stripe(est)
-            for tarea in (ideas, nueva_publicacion):
-                try:
-                    tarea(est)
-                except Exception as e:
-                    enviar(f"⚠️ {e}")
-            if MOTOR_REPO:  # señal de vida para que GitHub mantenga el motor encendido
-                escribir(MOTOR_REPO, "latido.txt", ahora().isoformat(), "latido")
-        elif accion == "noche":
-            leer_stripe(est)
-            preguntar_estres()
-    except Exception as e:
-        enviar(f"⚠️ {e}")
+        # Turno de unas 5 horas: escucha Telegram al momento y hace las tareas del día.
+        while time.time() - inicio < 5.25 * 3600:
+            try:
+                if time.time() - webs_hora > 1800:
+                    _WEBS, webs_hora = None, time.time()
+                escuchar(est, espera=50)
+                tareas_del_dia(est)
+                publicar_panel(est)
+                original = guardar_estado(est, original)
+            except Exception as e:
+                print("Aviso:", str(e)[:200])
+                time.sleep(10)
     finally:
-        publicar_panel(est)
-        guardar_estado(est, original)
-    print("Vuelta terminada.")
+        try:
+            publicar_panel(est)
+            guardar_estado(est, original)
+        finally:
+            relanzar()
+    print("Turno terminado.")
 
 
 if __name__ == "__main__":
