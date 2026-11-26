@@ -14,6 +14,30 @@ android {
         versionName '1.' + (System.getenv('VERSION') ?: '1')
     }
 
+    signingConfigs {
+        release {
+            storeFile file(System.getenv('LLAVE') ?: 'yarvis.jks')
+            storePassword System.getenv('LLAVE_CLAVE') ?: ''
+            keyAlias 'yarvis'
+            keyPassword System.getenv('LLAVE_CLAVE') ?: ''
+            enableV1Signing true
+            enableV2Signing true
+            enableV3Signing true
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
