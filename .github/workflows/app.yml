@@ -33,9 +33,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          git clone --depth 1 https://x-access-token:${GH_TOKEN}@github.com/ivanjalda/mi-panel.git panel
-          cp android/app/build/outputs/apk/debug/app-debug.apk panel/yarvis.apk
-          cd panel
+          git clone --depth 1 https://x-access-token:${GH_TOKEN}@github.com/ivanjalda/mi-panel.git /tmp/sitio
+          cp android/app/build/outputs/apk/debug/app-debug.apk /tmp/sitio/yarvis.apk
+          cd /tmp/sitio
           git config user.name "Yarvis"
           git config user.email "yarvis@users.noreply.github.com"
           git add yarvis.apk
