@@ -11,8 +11,10 @@ import base64
 import hashlib
 import json
 import os
+import queue
 import re
 import sys
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -221,7 +223,7 @@ def buscar_modelo():
     return buenos[-1] if buenos else None
 
 
-def gemini(texto, solo_json=False, intentos=6):
+def gemini(texto, solo_json=False, intentos=4):
     global _MODELO, _BUSCADO
     for i in range(intentos):
         modelo = _MODELO or CONFIG.get("modelo") or "gemini-flash-latest"
@@ -230,7 +232,7 @@ def gemini(texto, solo_json=False, intentos=6):
                  "generationConfig": {"temperature": 0.7}}
         if solo_json:
             datos["generationConfig"]["responseMimeType"] = "application/json"
-        s, d = http("POST", url, datos, {"x-goog-api-key": GEMINI_KEY}, espera=300)
+        s, d = http("POST", url, datos, {"x-goog-api-key": GEMINI_KEY}, espera=150)
         if s == 200:
             try:
                 partes = d["candidates"][0]["content"]["parts"]
@@ -242,10 +244,11 @@ def gemini(texto, solo_json=False, intentos=6):
             _MODELO = buscar_modelo()
             continue
         if s in (0, 429, 500, 503):
-            time.sleep(20 * (i + 1))
+            time.sleep(15 * (i + 1))
             continue
         raise RuntimeError(f"Gemini dio un error ({s}). Revisa la clave GEMINI_API_KEY.")
-    raise RuntimeError("Gemini está muy ocupado ahora. Vuelve a pedírmelo en un rato.")
+    raise RuntimeError("Mi cerebro gratis (Gemini) está saturado en este momento. "
+                       "Vuelve a escribirme en unos minutos y lo hago.")
 
 
 def a_json(txt):
@@ -291,7 +294,7 @@ def pedir_permiso(est, propuesta):
     pid = uuid.uuid4().hex[:10]
     propuesta["fecha"] = hoy()
     est["pendientes"][pid] = propuesta
-    tipo = "🆕 WEB NUEVA" if propuesta["tipo"] == "crear_web" else "🔧 MEJORA"
+    tipo = {"crear_web": "🆕 WEB NUEVA", "mejorar_motor": "🧬 MEJORA DE YARVIS"}.get(propuesta["tipo"], "🔧 MEJORA")
     donde = f"\n📁 {propuesta.get('repo')}" if propuesta.get("repo") else ""
     enviar(f"{tipo}{donde}\n\n{propuesta.get('resumen', '')}\n\n¿Lo hago?",
            {"inline_keyboard": [fila(("✅ Sí, hazlo", "si:" + pid), ("❌ No", "no:" + pid))]})
@@ -424,6 +427,36 @@ No quites nada que funcione y no tenga que ver con el cambio."""
             "En 1-2 minutos se ve el cambio. Si no te gusta, escribe /deshacer")
 
 
+def mejorar_motor(p, est):
+    """Yarvis se mejora a sí mismo, con copia de seguridad y comprobación antes de guardar."""
+    viejo, _ = leer(MOTOR_REPO, "motor.py")
+    if not viejo:
+        raise RuntimeError("No encuentro mi propio código. Pídemelo otra vez en un rato.")
+    pedido = f"""Eres un programador experto en Python. Este es el programa completo de un asistente
+llamado Yarvis (motor.py), que funciona en GitHub Actions con Gemini, Telegram y GitHub:
+=====
+{viejo}
+=====
+Cambio que pide el dueño: {p.get('instrucciones') or p.get('resumen')}
+
+Reglas: solo librería estándar de Python (y cryptography, ya instalada); no toques las claves;
+mantén todo lo que ya funciona; textos para el dueño en español sencillo y positivo.
+Devuelve SOLO el archivo motor.py completo ya cambiado, de principio a fin, sin explicaciones."""
+    nuevo = quitar_vallas(gemini(pedido))
+    if len(nuevo) < len(viejo) * 0.85 or "def main(" not in nuevo:
+        raise RuntimeError("El cambio salió incompleto y no lo he aplicado, para no romperme. "
+                           "Pídemelo otra vez, con un cambio más concreto.")
+    try:
+        compile(nuevo, "motor.py", "exec")
+    except SyntaxError as e:
+        raise RuntimeError(f"El cambio tenía un fallo (línea {e.lineno}) y no lo he aplicado. "
+                           "Pídemelo otra vez y lo intento de nuevo.")
+    est["deshacer"].append({"repo": MOTOR_REPO, "archivo": "motor.py", "contenido": viejo})
+    escribir(MOTOR_REPO, "motor.py", nuevo, f"Yarvis se mejora: {(p.get('resumen') or '')[:60]}")
+    return ("🧬 Me he mejorado. El cambio funcionará en mi próximo turno.\n"
+            "Para aplicarlo ya escribe /reiniciar. Si algo no te gusta, escribe /deshacer.")
+
+
 def deshacer(est):
     if not est["deshacer"]:
         return "No hay cambios recientes que deshacer."
@@ -435,6 +468,8 @@ def deshacer(est):
 def ejecutar(p, est):
     if p["tipo"] == "crear_web":
         r = crear_web(p)
+    elif p["tipo"] == "mejorar_motor":
+        r = mejorar_motor(p, est)
     else:
         r = mejorar_web(p, est)
     est["hecho"].append({"fecha": ahora().isoformat()[:16], "resumen": p.get("resumen", "")[:200],
@@ -686,6 +721,7 @@ Háblame normal, por ejemplo:
 /ideas – ideas para ganar más
 /webs – tus webs
 /deshacer – quito el último cambio
+/reiniciar – aplico al momento mis mejoras
 
 💶 CUENTAS
 /ingreso 120 venta tienda
@@ -726,6 +762,7 @@ Decide qué hacer y devuelve SOLO un JSON con:
         "crear_web" (pide crear una web que no existe),
         "mejorar_web" (pide cambiar una web suya; si dice que una web ya existe, usa esa),
         "apunte" (cuenta un ingreso o un gasto de dinero),
+        "mejorar_motor" (pide cambiar o mejorar a Yarvis mismo: cómo contesta, qué hace, nuevas funciones),
 "respuesta": tu contestación en español sencillo y positivo (si tipo es respuesta),
 "repo": nombre exacto del repositorio de la lista (si es mejora),
 "archivo": archivo a cambiar si lo sabes (si no, vacío),
@@ -742,10 +779,43 @@ Decide qué hacer y devuelve SOLO un JSON con:
                        float(plan["importe"]), plan.get("concepto", ""))
     if tipo == "mejorar_web" and plan.get("repo") not in {w["repo"] for w in webs}:
         return "¿En cuál de tus webs lo hago? Escribe /webs para ver los nombres."
-    if tipo in ("crear_web", "mejorar_web"):
+    if tipo in ("crear_web", "mejorar_web", "mejorar_motor"):
         pedir_permiso(est, plan)
         return None
     return plan.get("respuesta") or "Cuéntamelo con otras palabras y me pongo con ello."
+
+
+# ---------------------------------------------------------------- trabajos largos en segundo plano
+COLA = queue.Queue()
+REINICIAR = False
+
+
+def en_cola(est, aviso, tarea, *args):
+    """Contesta al momento y hace el trabajo largo detrás, sin dejar de escuchar."""
+    pendientes = COLA.unfinished_tasks
+    if aviso:
+        enviar(aviso + (f"\n(Tengo {pendientes} tarea(s) delante, voy en orden)" if pendientes else ""))
+    COLA.put((tarea, args))
+
+
+def obrero():
+    while True:
+        tarea, args = COLA.get()
+        try:
+            r = tarea(*args)
+            if isinstance(r, str) and r:
+                enviar(r)
+        except Exception as e:
+            enviar(f"⚠️ {e}")
+        finally:
+            COLA.task_done()
+
+
+def responder(est, texto):
+    r = entender(texto, est)
+    if r:
+        est["charla"].append({"quien": "Motor", "texto": r[:1500]})
+    return r
 
 
 def boton(est, c):
@@ -758,8 +828,7 @@ def boton(est, c):
         if not p:
             enviar("Esa propuesta ya está atendida.")
         elif orden == "si":
-            enviar("⚙️ Manos a la obra. Te aviso al terminar…")
-            enviar(ejecutar(p, est))
+            en_cola(est, "⚙️ Manos a la obra. Te aviso al terminar. Mientras, puedes seguir hablándome.", ejecutar, p, est)
         else:
             enviar("👌 Descartado.")
     elif orden == "su":
@@ -773,8 +842,7 @@ def boton(est, c):
             enviar("✅ Guardada en tu panel, sección Redes, lista para copiar y publicar.")
     elif orden == "ro":
         est["redes_pend"].pop(dato, None)
-        enviar("🔄 Preparando otra…")
-        nueva_publicacion(est)
+        en_cola(est, "🔄 Preparando otra…", nueva_publicacion, est)
 
 
 def escuchar(est, espera=0):
@@ -798,10 +866,13 @@ def escuchar(est, espera=0):
             if orden in ("/start", "/ayuda", "/help"):
                 enviar(AYUDA)
             elif orden == "/ideas":
-                enviar("💡 Pensando ideas… (tardo unos minutos)")
-                ideas(est)
+                en_cola(est, "💡 Pensando ideas… (tardo unos minutos)", ideas, est)
             elif orden == "/webs":
                 enviar("🌐 Tus webs:\n" + texto_webs(mis_webs()))
+            elif orden == "/reiniciar":
+                global REINICIAR
+                REINICIAR = True
+                enviar("🔄 Me reinicio para aplicar mis cambios. Vuelvo en 1-2 minutos.")
             elif orden == "/deshacer":
                 enviar(deshacer(est))
             elif orden in ("/ingreso", "/gasto"):
@@ -823,17 +894,13 @@ def escuchar(est, espera=0):
             elif orden == "/bienestar":
                 enviar(resumen_bienestar(est))
             elif orden == "/post":
-                enviar("📱 Preparando tu publicación…")
-                nueva_publicacion(est)
+                en_cola(est, "📱 Preparando tu publicación…", nueva_publicacion, est)
             elif orden == "/panel":
                 enviar(f"📲 Tu panel: https://{dueno().lower()}.github.io/{NOMBRE_PANEL}/" if PANEL_CLAVE
                        else "📲 Para activar tu panel falta guardar la llave PANEL_CLAVE en GitHub.")
             else:
                 est["charla"].append({"quien": "Dueño", "texto": texto[:1500]})
-                r = entender(texto, est)
-                if r:
-                    est["charla"].append({"quien": "Motor", "texto": r[:1500]})
-                    enviar(r)
+                en_cola(est, "🧠 Recibido. Lo estoy pensando…", responder, est, texto)
         except Exception as e:
             enviar(f"⚠️ {e}")
 
@@ -856,7 +923,7 @@ def tareas_del_dia(est):
     marcas = est.setdefault("marcas", {})
     if h.hour >= 8 and marcas.get("manana") != dia:
         marcas["manana"] = dia
-        manana(est)
+        en_cola(est, None, manana, est)
     if (h.hour, h.minute) >= (22, 30) and marcas.get("noche") != dia:
         marcas["noche"] = dia
         leer_stripe(est)
@@ -886,10 +953,11 @@ def main():
             manana(est)
         except Exception as e:
             enviar(f"⚠️ {e}")
+    threading.Thread(target=obrero, daemon=True).start()
     inicio, webs_hora = time.time(), time.time()
     try:
         # Turno de unas 5 horas: escucha Telegram al momento y hace las tareas del día.
-        while time.time() - inicio < 5.25 * 3600:
+        while time.time() - inicio < 5.25 * 3600 and not REINICIAR:
             try:
                 if time.time() - webs_hora > 1800:
                     _WEBS, webs_hora = None, time.time()
@@ -900,6 +968,10 @@ def main():
             except Exception as e:
                 print("Aviso:", str(e)[:200])
                 time.sleep(10)
+        fin = time.time() + 1500  # deja terminar lo que esté haciendo (máx. 25 min)
+        while COLA.unfinished_tasks and time.time() < fin:
+            escuchar(est, espera=20)
+            original = guardar_estado(est, original)
     finally:
         try:
             publicar_panel(est)
