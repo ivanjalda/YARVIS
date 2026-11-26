@@ -241,13 +241,13 @@ def lista_modelos():
     return vistos
 
 
-def gemini(texto, solo_json=False, rondas=3):
+def gemini(texto, solo_json=False, rondas=3, extra=None):
     """Prueba varios modelos gratis de Gemini (cada uno tiene su propio cupo diario)."""
     global _MODELO, _BUSCADO
     for ronda in range(rondas):
         for modelo in lista_modelos():
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent"
-            datos = {"contents": [{"role": "user", "parts": [{"text": texto}]}],
+            datos = {"contents": [{"role": "user", "parts": (extra or []) + [{"text": texto}]}],
                      "generationConfig": {"temperature": 0.7}}
             if solo_json:
                 datos["generationConfig"]["responseMimeType"] = "application/json"
@@ -271,6 +271,73 @@ def gemini(texto, solo_json=False, rondas=3):
                     _MODELO = buscar_modelo()
         time.sleep(30 * (ronda + 1))
     raise Ocupado("Gemini está saturado ahora mismo.")
+
+
+# ---------------------------------------------------------------- VOZ
+def bajar(url, espera=60):
+    with urllib.request.urlopen(urllib.request.Request(url), timeout=espera) as r:
+        return r.read()
+
+
+def transcribir(file_id, tipo="audio/ogg"):
+    """Convierte tu nota de voz de Telegram en texto."""
+    d = tg("getFile", {"file_id": file_id})
+    ruta = (d.get("result") or {}).get("file_path")
+    if not ruta:
+        raise RuntimeError("No pude abrir tu nota de voz. Mándamela otra vez.")
+    audio = bajar(f"https://api.telegram.org/file/bot{TG_TOKEN}/{ruta}")
+    parte = [{"inline_data": {"mime_type": tipo, "data": base64.b64encode(audio).decode()}}]
+    t = gemini("Transcribe exactamente lo que dice esta nota de voz, en español. "
+               "Devuelve solo el texto, sin comillas ni explicaciones.", extra=parte)
+    return t.strip()
+
+
+VOCES_TTS = ["gemini-2.5-flash-preview-tts", "gemini-2.5-flash-tts", "gemini-2.5-pro-preview-tts"]
+
+
+def subir_tg(metodo, campos, campo_archivo, nombre, contenido, tipo):
+    limite = uuid.uuid4().hex
+    cuerpo = b""
+    for k, v in campos.items():
+        cuerpo += (f"--{limite}\r\nContent-Disposition: form-data; name=\"{k}\"\r\n\r\n{v}\r\n").encode()
+    cuerpo += (f"--{limite}\r\nContent-Disposition: form-data; name=\"{campo_archivo}\"; "
+               f"filename=\"{nombre}\"\r\nContent-Type: {tipo}\r\n\r\n").encode() + contenido + b"\r\n"
+    cuerpo += f"--{limite}--\r\n".encode()
+    req = urllib.request.Request(f"https://api.telegram.org/bot{TG_TOKEN}/{metodo}", data=cuerpo,
+                                 headers={"Content-Type": f"multipart/form-data; boundary={limite}"})
+    with urllib.request.urlopen(req, timeout=120) as r:
+        return r.status
+
+
+def hablar(texto):
+    """Te contesta con voz (además del texto). Si la voz falla, el texto ya te ha llegado."""
+    import subprocess, tempfile
+    limpio = re.sub(r"[\U0001F000-\U0001FFFF\u2600-\u27BF]", "", texto or "")
+    limpio = re.sub(r"https?://\S+", "el enlace que te he escrito", limpio)[:1800]
+    if not limpio.strip():
+        return
+    for modelo in VOCES_TTS:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent"
+        datos = {"contents": [{"parts": [{"text": "Lee en español de España, con voz cálida y segura: " + limpio}]}],
+                 "generationConfig": {"responseModalities": ["AUDIO"], "speechConfig": {
+                     "voiceConfig": {"prebuiltVoiceConfig": {"voiceName": "Charon"}}}}}
+        s, d = http("POST", url, datos, {"x-goog-api-key": GEMINI_KEY}, espera=180)
+        if s != 200:
+            print("Aviso de voz:", modelo, s, str(d)[:120])
+            continue
+        try:
+            pcm = base64.b64decode(d["candidates"][0]["content"]["parts"][0]["inlineData"]["data"])
+            with tempfile.TemporaryDirectory() as tmp:
+                ent, sal = os.path.join(tmp, "v.pcm"), os.path.join(tmp, "v.ogg")
+                with open(ent, "wb") as f:
+                    f.write(pcm)
+                subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "s16le", "-ar", "24000",
+                                "-ac", "1", "-i", ent, "-c:a", "libopus", "-b:a", "32k", sal], check=True)
+                with open(sal, "rb") as f:
+                    subir_tg("sendVoice", {"chat_id": TG_CHAT}, "voice", "yarvis.ogg", f.read(), "audio/ogg")
+            return
+        except Exception as e:
+            print("Aviso de voz:", str(e)[:150])
 
 
 def a_json(txt):
@@ -637,24 +704,93 @@ def resumen_cuentas(est):
 
 
 def leer_stripe(est):
+    """Lee tus cobros de Stripe (solo lectura): lo de este mes y el total desde el principio."""
     if not STRIPE_KEY:
         return
-    inicio = ahora().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    total, despues = 0.0, None
-    for _ in range(10):
-        q = f"created[gte]={int(inicio.timestamp())}&limit=100" + (f"&starting_after={despues}" if despues else "")
+    mes_actual = hoy()[:7]
+    total, por_mes, cobros, monedas, despues = 0.0, {}, 0, {}, None
+    for _ in range(30):
+        q = "limit=100" + (f"&starting_after={despues}" if despues else "")
         s, d = http("GET", "https://api.stripe.com/v1/charges?" + q, None,
                     {"Authorization": "Bearer " + STRIPE_KEY})
         if s != 200:
-            print("Aviso de Stripe:", s)
+            print("Aviso de Stripe:", s, str(d)[:150])
+            est["stripe_error"] = f"Stripe respondió {s}"
             return
         for c in d.get("data", []):
             if c.get("paid") and c.get("status") == "succeeded":
-                total += (c.get("amount", 0) - c.get("amount_refunded", 0)) / 100.0
+                neto = (c.get("amount", 0) - c.get("amount_refunded", 0)) / 100.0
+                mon = (c.get("currency") or "eur").upper()
+                monedas[mon] = round(monedas.get(mon, 0) + neto, 2)
+                mes = datetime.fromtimestamp(c.get("created", 0), ZONA).strftime("%Y-%m")
+                por_mes[mes] = round(por_mes.get(mes, 0) + neto, 2)
+                total += neto
+                cobros += 1
         if not d.get("has_more") or not d.get("data"):
             break
         despues = d["data"][-1]["id"]
-    est.setdefault("stripe_mes", {})[hoy()[:7]] = round(total, 2)
+    est.setdefault("stripe_mes", {})[mes_actual] = por_mes.get(mes_actual, 0)
+    est["stripe_total"] = {"total": round(total, 2), "cobros": cobros, "monedas": monedas,
+                           "por_mes": dict(sorted(por_mes.items())[-12:]), "fecha": ahora().isoformat()[:16]}
+    est.pop("stripe_error", None)
+
+
+def importe_monedas(monedas):
+    if not monedas:
+        return euros(0)
+    return " + ".join(euros(v) if m == "EUR" else f"{v:,.2f} {m}".replace(",", "X").replace(".", ",").replace("X", ".")
+                      for m, v in monedas.items())
+
+
+def web_viva(url):
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Yarvis"})
+        with urllib.request.urlopen(req, timeout=25) as r:
+            return r.status < 400
+    except Exception:
+        return False
+
+
+def informe(est):
+    """Cómo están todas tus webs y tiendas, sus visitas y lo que has facturado."""
+    leer_stripe(est)
+    filas, visitas_total, caidas = [], 0, []
+    for w in mis_webs():
+        repo = f"{dueno()}/{w['repo']}"
+        s, t = gh("GET", f"/repos/{repo}/traffic/views")
+        vistas = t.get("count", 0) if s == 200 else 0
+        personas = t.get("uniques", 0) if s == 200 else 0
+        s, info = gh("GET", f"/repos/{repo}")
+        cambio = (info.get("pushed_at") or "")[:10] if s == 200 else ""
+        origen = ""
+        if vistas:
+            s, refs = gh("GET", f"/repos/{repo}/traffic/popular/referrers")
+            if s == 200 and refs:
+                origen = ", ".join(r.get("referrer", "") for r in refs[:2])
+        viva = web_viva(w["url"])
+        if not viva:
+            caidas.append(w["repo"])
+        visitas_total += vistas
+        filas.append((vistas, f"{'🟢' if viva else '🔴'} {w['repo']} — {vistas} visitas ({personas} personas)"
+                              + (f" · llegan de {origen}" if origen else "")
+                              + (f" · último cambio {cambio}" if cambio else "")))
+    filas.sort(key=lambda x: -x[0])
+    st = est.get("stripe_total")
+    if STRIPE_KEY and st:
+        mes = hoy()[:7]
+        dinero = (f"💶 FACTURADO\nEste mes: {euros(st['por_mes'].get(mes, 0))}\n"
+                  f"Total desde el principio: {importe_monedas(st['monedas'])} ({st['cobros']} cobros)")
+    elif STRIPE_KEY:
+        dinero = "💶 FACTURADO\nStripe no ha respondido ahora; lo vuelvo a mirar en un rato."
+    else:
+        dinero = "💶 FACTURADO\nPara verlo falta la llave STRIPE_KEY en GitHub."
+    texto = (f"📊 ESTADO DE TUS NEGOCIOS ({ahora().strftime('%d/%m %H:%M')})\n\n{dinero}\n\n"
+             f"👀 Visitas de las últimas 2 semanas: {visitas_total} en {len(filas)} webs\n"
+             + (f"🔴 No abren ahora: {', '.join(caidas)}\n" if caidas else "✅ Todas las webs abren bien\n")
+             + "\n" + "\n".join(f for _, f in filas))
+    est["informe"] = {"fecha": ahora().isoformat()[:16], "visitas": visitas_total, "caidas": caidas,
+                      "webs": len(filas)}
+    return texto
 
 
 # ================================================================ BIENESTAR
@@ -779,6 +915,8 @@ def publicar_panel(est):
             "apuntes": [a for a in est["apuntes"] if a["fecha"][:7] == mes][-50:][::-1],
             "bienestar": est["bienestar"][-14:],
             "redes": est["redes"][-20:][::-1],
+            "facturado_total": est.get("stripe_total", {}),
+            "informe": est.get("informe", {}),
         }
         texto = json.dumps(datos, ensure_ascii=False, sort_keys=True)
         huella = hashlib.sha256(texto.encode()).hexdigest()
@@ -794,15 +932,17 @@ def publicar_panel(est):
 # ================================================================ TUS MENSAJES
 AYUDA = """🤖 Tu motor está activo.
 
-Háblame normal, por ejemplo:
+Háblame normal, escribiendo o con notas de voz, por ejemplo:
 • "Mejora la portada de sports-edge"
 • "Crea una web de recetas fáciles con afiliados"
 • "He vendido 120 € en DAZMOND" o "He pagado 15 € del dominio"
+• "¿Cómo van mis tiendas y cuánto he facturado?"
 
 📂 NEGOCIOS
 /ideas – ideas para ganar más
 /pendientes – vuelvo a enseñarte las ideas sin responder
 /webs – tus webs
+/estado – cómo van todas tus webs y tiendas, visitas y lo facturado
 /deshacer – quito el último cambio
 /reiniciar – aplico al momento mis mejoras
 
@@ -819,6 +959,10 @@ Cada mañana te pregunto el sueño y cada noche el estrés.
 📱 REDES
 /post – una publicación nueva ahora
 Cada mañana te preparo una.
+
+🎙️ VOZ
+Mándame notas de voz y te contesto con voz y por escrito.
+/voz – activa o quita que te conteste siempre con voz
 
 📲 /panel – enlace a tu panel (web y app)
 
@@ -846,6 +990,7 @@ Decide qué hacer y devuelve SOLO un JSON con:
         "mejorar_web" (pide cambiar una web suya; si dice que una web ya existe, usa esa),
         "apunte" (cuenta un ingreso o un gasto de dinero),
         "mejorar_motor" (pide cambiar o mejorar a Yarvis mismo: cómo contesta, qué hace, nuevas funciones),
+        "informe" (pregunta cómo van sus webs o tiendas, visitas, ventas, cuánto ha facturado o el estado del negocio),
 "respuesta": tu contestación en español sencillo y positivo (si tipo es respuesta),
 "repo": nombre exacto del repositorio de la lista (si es mejora),
 "archivo": archivo a cambiar si lo sabes (si no, vacío),
@@ -857,6 +1002,8 @@ Decide qué hacer y devuelve SOLO un JSON con:
     if isinstance(plan, list):
         plan = plan[0] if plan else {}
     tipo = plan.get("tipo")
+    if tipo == "informe":
+        return informe(est)
     if tipo == "apunte" and plan.get("importe"):
         return apuntar(est, "gasto" if plan.get("clase") == "gasto" else "ingreso",
                        float(plan["importe"]), plan.get("concepto", ""))
@@ -914,11 +1061,24 @@ def revisar_reintentos():
             COLA.put((item[1], item[2], item[3]))
 
 
-def responder(est, texto):
+def responder(est, texto, voz=False):
     r = entender(texto, est)
     if r:
         est["charla"].append({"quien": "Motor", "texto": r[:1500]})
+        if voz or est.get("voz"):
+            enviar(r)
+            hablar(r)
+            return None
     return r
+
+
+def escuchar_voz(est, file_id, tipo):
+    texto = transcribir(file_id, tipo)
+    if not texto:
+        return "No he entendido la nota de voz. ¿Me la repites?"
+    enviar(f"🎙️ He entendido: «{texto}»")
+    est["charla"].append({"quien": "Dueño", "texto": texto[:1500]})
+    return responder(est, texto, voz=True)
 
 
 def boton(est, c):
@@ -972,7 +1132,14 @@ def escuchar(est, espera=0):
                     boton(est, c)
                 continue
             m = u.get("message") or {}
-            if str(m.get("chat", {}).get("id")) != TG_CHAT or not m.get("text"):
+            if str(m.get("chat", {}).get("id")) != TG_CHAT:
+                continue
+            nota = m.get("voice") or m.get("audio")
+            if nota:
+                en_cola(est, "🎧 Te escucho…", escuchar_voz, est, nota["file_id"],
+                        nota.get("mime_type") or "audio/ogg")
+                continue
+            if not m.get("text"):
                 continue
             texto = m["text"].strip()
             partes = texto.split(maxsplit=1)
@@ -1008,6 +1175,12 @@ def escuchar(est, espera=0):
                 else:
                     est["objetivo"] = abs(n)
                     enviar("🎯 Objetivo guardado.\n\n" + resumen_cuentas(est))
+            elif orden in ("/estado", "/informe", "/tiendas"):
+                en_cola(est, "📊 Revisando todas tus webs, visitas y Stripe… (1-2 minutos)", informe, est)
+            elif orden == "/voz":
+                est["voz"] = not est.get("voz")
+                enviar("🔊 Desde ahora te contesto también con voz." if est["voz"]
+                       else "✍️ Desde ahora te contesto solo por escrito (si me mandas voz, te respondo con voz).")
             elif orden == "/cuentas":
                 enviar(resumen_cuentas(est))
             elif orden == "/bienestar":
@@ -1028,6 +1201,10 @@ def escuchar(est, espera=0):
 def manana(est):
     preguntar_sueno()
     leer_stripe(est)
+    try:
+        enviar(informe(est))
+    except Exception as e:
+        print("Aviso del informe:", str(e)[:150])
     for tarea in (ideas, nueva_publicacion):
         try:
             tarea(est)
