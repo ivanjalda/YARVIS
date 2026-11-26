@@ -185,7 +185,7 @@ def cargar_estado():
     est = json.loads(txt) if txt else {}
     for clave, valor in (("offset", 0), ("pendientes", {}), ("deshacer", []), ("charla", []),
                          ("hecho", []), ("apuntes", []), ("objetivo", 0), ("bienestar", []),
-                         ("redes", []), ("redes_pend", {}), ("panel_hash", "")):
+                         ("redes", []), ("redes_pend", {}), ("panel_hash", ""), ("aprobadas", {})):
         est.setdefault(clave, valor)
     return est, (txt or "")
 
@@ -223,32 +223,54 @@ def buscar_modelo():
     return buenos[-1] if buenos else None
 
 
-def gemini(texto, solo_json=False, intentos=4):
+class Ocupado(RuntimeError):
+    """Gemini saturado: la tarea se guarda y se reintenta sola."""
+
+
+MODELOS_RESPALDO = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-flash-lite",
+                    "gemini-2.0-flash-lite", "gemini-flash-lite-latest"]
+_MALOS = set()
+
+
+def lista_modelos():
+    base = [_MODELO, CONFIG.get("modelo") or "gemini-flash-latest"] + MODELOS_RESPALDO
+    vistos = []
+    for m in base:
+        if m and m not in vistos and m not in _MALOS:
+            vistos.append(m)
+    return vistos
+
+
+def gemini(texto, solo_json=False, rondas=3):
+    """Prueba varios modelos gratis de Gemini (cada uno tiene su propio cupo diario)."""
     global _MODELO, _BUSCADO
-    for i in range(intentos):
-        modelo = _MODELO or CONFIG.get("modelo") or "gemini-flash-latest"
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent"
-        datos = {"contents": [{"role": "user", "parts": [{"text": texto}]}],
-                 "generationConfig": {"temperature": 0.7}}
-        if solo_json:
-            datos["generationConfig"]["responseMimeType"] = "application/json"
-        s, d = http("POST", url, datos, {"x-goog-api-key": GEMINI_KEY}, espera=150)
-        if s == 200:
-            try:
-                partes = d["candidates"][0]["content"]["parts"]
-                return "".join(p.get("text", "") for p in partes if not p.get("thought"))
-            except Exception:
-                raise RuntimeError("Gemini no devolvió respuesta. Prueba otra vez.")
-        if s in (400, 404) and not _BUSCADO:
-            _BUSCADO = True
-            _MODELO = buscar_modelo()
-            continue
-        if s in (0, 429, 500, 503):
-            time.sleep(15 * (i + 1))
-            continue
-        raise RuntimeError(f"Gemini dio un error ({s}). Revisa la clave GEMINI_API_KEY.")
-    raise RuntimeError("Mi cerebro gratis (Gemini) está saturado en este momento. "
-                       "Vuelve a escribirme en unos minutos y lo hago.")
+    for ronda in range(rondas):
+        for modelo in lista_modelos():
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent"
+            datos = {"contents": [{"role": "user", "parts": [{"text": texto}]}],
+                     "generationConfig": {"temperature": 0.7}}
+            if solo_json:
+                datos["generationConfig"]["responseMimeType"] = "application/json"
+            s, d = http("POST", url, datos, {"x-goog-api-key": GEMINI_KEY}, espera=240)
+            if s == 200:
+                try:
+                    partes = d["candidates"][0]["content"]["parts"]
+                    r = "".join(p.get("text", "") for p in partes if not p.get("thought"))
+                except Exception:
+                    r = ""
+                if r.strip():
+                    return r
+                continue
+            print("Aviso de Gemini:", modelo, s, str(d)[:150])
+            if s in (401, 403) or (s == 400 and "API key" in str(d)):
+                raise RuntimeError("La llave de Gemini (GEMINI_API_KEY) no funciona. Hay que renovarla.")
+            if s in (400, 404):
+                _MALOS.add(modelo)
+                if not _BUSCADO:
+                    _BUSCADO = True
+                    _MODELO = buscar_modelo()
+        time.sleep(30 * (ronda + 1))
+    raise Ocupado("Gemini está saturado ahora mismo.")
 
 
 def a_json(txt):
@@ -465,16 +487,76 @@ def deshacer(est):
     return f"↩️ Listo: {u['repo']} ({u['archivo']}) vuelve a estar como antes."
 
 
+def url_de(repo, archivo=None):
+    nombre = (repo or "").split("/")[-1]
+    base = next((w["url"] for w in mis_webs() if w["repo"] == nombre),
+                f"https://{dueno().lower()}.github.io/{nombre}/")
+    if not base.endswith("/"):
+        base += "/"
+    if archivo and archivo != "index.html" and archivo.endswith(".html"):
+        base += archivo
+    return base
+
+
+def captura(url):
+    """Foto de cómo ha quedado la web, cuando GitHub ya la ha publicado."""
+    try:
+        time.sleep(110)
+        web = f"{url}?v={int(time.time())}"
+        foto = "https://s0.wp.com/mshots/v1/" + urllib.parse.quote(web, safe="") + "?w=1100&h=1600"
+        http("GET", foto, espera=60)
+        time.sleep(50)
+        http("GET", foto, espera=60)
+        tg("sendPhoto", {"chat_id": TG_CHAT, "photo": foto,
+                         "caption": "📸 Así ha quedado. Pulsa «Ver cómo quedó» para verla en vivo."})
+    except Exception as e:
+        print("Aviso de captura:", str(e)[:150])
+
+
+def mostrar_resultado(texto, url, deshacer_boton=True):
+    teclas = []
+    if url:
+        teclas.append([{"text": "👀 Ver cómo quedó", "url": url}])
+    if deshacer_boton:
+        teclas.append(fila(("↩️ Deshacer este cambio", "dz:0")))
+    enviar(texto, {"inline_keyboard": teclas} if teclas else None)
+    if url:
+        threading.Thread(target=captura, args=(url,), daemon=True).start()
+
+
 def ejecutar(p, est):
     if p["tipo"] == "crear_web":
         r = crear_web(p)
+        url = re.search(r"https://\S+", r)
+        mostrar_resultado(r + "\n\n📝 " + (p.get("resumen") or ""), url.group(0) if url else None, False)
     elif p["tipo"] == "mejorar_motor":
         r = mejorar_motor(p, est)
+        enviar(r)
     else:
         r = mejorar_web(p, est)
+        u = est["deshacer"][-1] if est["deshacer"] else {}
+        mostrar_resultado(r + "\n\n📝 Qué he hecho: " + (p.get("resumen") or ""),
+                          url_de(p.get("repo"), u.get("archivo")))
     est["hecho"].append({"fecha": ahora().isoformat()[:16], "resumen": p.get("resumen", "")[:200],
                          "repo": p.get("repo") or p.get("nombre_repo", "")})
-    return r
+    return None
+
+
+def ejecutar_aprobada(pid, p, est):
+    ejecutar(p, est)
+    est.setdefault("aprobadas", {}).pop(pid, None)
+
+
+def reenviar_pendientes(est):
+    if not est["pendientes"]:
+        return "No hay ideas esperando respuesta. Escribe /ideas para pedir nuevas."
+    enviar(f"📋 Ideas esperando tu respuesta: {len(est['pendientes'])}")
+    for pid, p in list(est["pendientes"].items()):
+        tipo = {"crear_web": "🆕 WEB NUEVA", "mejorar_motor": "🧬 MEJORA DE YARVIS"}.get(p.get("tipo"), "🔧 MEJORA")
+        donde = f"\n📁 {p.get('repo') or p.get('nombre_repo')}" if (p.get("repo") or p.get("nombre_repo")) else ""
+        enviar(f"{tipo}{donde}\n\n{p.get('resumen', '')}\n\n¿Lo hago?",
+               {"inline_keyboard": [fila(("✅ Sí, hazlo", "si:" + pid), ("❌ No", "no:" + pid))]})
+    return None
 
 
 def ideas(est):
@@ -719,6 +801,7 @@ Háblame normal, por ejemplo:
 
 📂 NEGOCIOS
 /ideas – ideas para ganar más
+/pendientes – vuelvo a enseñarte las ideas sin responder
 /webs – tus webs
 /deshacer – quito el último cambio
 /reiniciar – aplico al momento mis mejoras
@@ -795,20 +878,40 @@ def en_cola(est, aviso, tarea, *args):
     pendientes = COLA.unfinished_tasks
     if aviso:
         enviar(aviso + (f"\n(Tengo {pendientes} tarea(s) delante, voy en orden)" if pendientes else ""))
-    COLA.put((tarea, args))
+    COLA.put((tarea, args, 0))
+
+
+REINTENTOS = []  # (cuándo, tarea, args, intento)
 
 
 def obrero():
     while True:
-        tarea, args = COLA.get()
+        tarea, args, n = COLA.get()
         try:
             r = tarea(*args)
             if isinstance(r, str) and r:
                 enviar(r)
+        except Ocupado:
+            if n < 8:
+                REINTENTOS.append((time.time() + 1200, tarea, args, n + 1))
+                if n == 0:
+                    enviar("⏳ Gemini (el cerebro gratis) está saturado ahora mismo.\n"
+                           "Lo tengo apuntado y lo reintento yo solo cada 20 minutos. "
+                           "Te aviso en cuanto esté hecho.")
+            else:
+                enviar("⏳ Gemini sigue saturado hoy. Lo dejo guardado y lo retomo en mi próximo turno.")
         except Exception as e:
             enviar(f"⚠️ {e}")
         finally:
             COLA.task_done()
+
+
+def revisar_reintentos():
+    ahora_s = time.time()
+    for item in list(REINTENTOS):
+        if item[0] <= ahora_s:
+            REINTENTOS.remove(item)
+            COLA.put((item[1], item[2], item[3]))
 
 
 def responder(est, texto):
@@ -819,18 +922,30 @@ def responder(est, texto):
 
 
 def boton(est, c):
-    tg("answerCallbackQuery", {"callback_query_id": c["id"]})
-    tg("editMessageReplyMarkup", {"chat_id": TG_CHAT, "message_id": c["message"]["message_id"],
-                                  "reply_markup": {"inline_keyboard": []}})
     orden, _, dato = c.get("data", "").partition(":")
+    aviso = {"si": "✅ Aprobado, me pongo con ello", "no": "❌ Descartada"}.get(orden, "👍")
+    tg("answerCallbackQuery", {"callback_query_id": c["id"], "text": aviso})
+    msg = c["message"]
+    if orden in ("si", "no") and msg.get("text"):
+        marca = ("\n\n✅ APROBADA — trabajando en ello. Te mando el resultado con el enlace."
+                 if orden == "si" else "\n\n❌ DESCARTADA")
+        tg("editMessageText", {"chat_id": TG_CHAT, "message_id": msg["message_id"],
+                               "text": msg["text"][:3900] + marca})
+    else:
+        tg("editMessageReplyMarkup", {"chat_id": TG_CHAT, "message_id": msg["message_id"],
+                                      "reply_markup": {"inline_keyboard": []}})
     if orden in ("si", "no"):
         p = est["pendientes"].pop(dato, None)
         if not p:
-            enviar("Esa propuesta ya está atendida.")
+            enviar("Esa idea ya estaba atendida. Escribe /pendientes para ver las que quedan.")
         elif orden == "si":
-            en_cola(est, "⚙️ Manos a la obra. Te aviso al terminar. Mientras, puedes seguir hablándome.", ejecutar, p, est)
+            est.setdefault("aprobadas", {})[dato] = p
+            en_cola(est, "⚙️ Manos a la obra. Cuando termine te mando el enlace y una foto de cómo quedó.",
+                    ejecutar_aprobada, dato, p, est)
         else:
-            enviar("👌 Descartado.")
+            enviar("👌 Descartada. No la vuelvo a proponer.")
+    elif orden == "dz":
+        enviar(deshacer(est))
     elif orden == "su":
         enviar(registrar_bienestar(est, "sueno", int(dato)))
     elif orden == "es":
@@ -867,6 +982,10 @@ def escuchar(est, espera=0):
                 enviar(AYUDA)
             elif orden == "/ideas":
                 en_cola(est, "💡 Pensando ideas… (tardo unos minutos)", ideas, est)
+            elif orden == "/pendientes":
+                r = reenviar_pendientes(est)
+                if r:
+                    enviar(r)
             elif orden == "/webs":
                 enviar("🌐 Tus webs:\n" + texto_webs(mis_webs()))
             elif orden == "/reiniciar":
@@ -954,6 +1073,11 @@ def main():
         except Exception as e:
             enviar(f"⚠️ {e}")
     threading.Thread(target=obrero, daemon=True).start()
+    aprobadas = dict(est.get("aprobadas", {}))
+    if aprobadas:
+        enviar(f"♻️ Retomo {len(aprobadas)} tarea(s) que aprobaste y aún no estaban terminadas.")
+        for pid, p in aprobadas.items():
+            COLA.put((ejecutar_aprobada, (pid, p, est), 0))
     inicio, webs_hora = time.time(), time.time()
     try:
         # Turno de unas 5 horas: escucha Telegram al momento y hace las tareas del día.
@@ -962,6 +1086,7 @@ def main():
                 if time.time() - webs_hora > 1800:
                     _WEBS, webs_hora = None, time.time()
                 escuchar(est, espera=50)
+                revisar_reintentos()
                 tareas_del_dia(est)
                 publicar_panel(est)
                 original = guardar_estado(est, original)
