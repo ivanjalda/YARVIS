@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-MOTOR PROPIO  (versión 2)
+YARVIS  (versión 3)
 - Cerebro: Gemini.  Casa: GitHub.  Mando: tu bot de Telegram.  Panel: mi-panel.
 - Secciones: Negocios, Cuentas, Bienestar, Redes.
 - Nada se publica sin tu "Sí".
@@ -1064,6 +1064,11 @@ def main():
     if faltan:
         print("Faltan estas claves en Secrets:", ", ".join(faltan))
         sys.exit(1)
+    global MOTOR_REPO
+    if MOTOR_REPO:  # si el proyecto cambia de nombre en GitHub, Yarvis usa el nombre nuevo
+        s, d = gh("GET", f"/repos/{MOTOR_REPO}")
+        if s == 200 and d.get("full_name"):
+            MOTOR_REPO = d["full_name"]
     accion = (sys.argv[1] if len(sys.argv) > 1 else "vigilar").strip().lower()
     est, original = cargar_estado()
     if accion in ("manana", "ideas"):
