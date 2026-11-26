@@ -7,6 +7,10 @@ on:
       - "android/**"
       - ".github/workflows/app.yml"
 
+concurrency:
+  group: app-android
+  cancel-in-progress: true
+
 jobs:
   apk:
     runs-on: ubuntu-latest
@@ -22,19 +26,35 @@ jobs:
           gradle-version: "8.9"
       - name: Icono de la app
         run: |
-          mkdir -p android/app/src/main/res/mipmap-xxxhdpi
-          curl -sfL https://ivanjalda.github.io/mi-panel/icono-192.png -o android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+            mkdir -p android/app/src/main/res/mipmap-$d
+            curl -sfL https://ivanjalda.github.io/mi-panel/icono-192.png -o android/app/src/main/res/mipmap-$d/ic_launcher.png
+          done
+      - name: Llave de firma (se guarda en la memoria privada)
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          API=https://api.github.com/repos/ivanjalda/motor-memoria/contents/yarvis.jks
+          if ! curl -sf -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github.raw" "$API" -o "$RUNNER_TEMP/yarvis.jks"; then
+            keytool -genkeypair -keystore "$RUNNER_TEMP/yarvis.jks" -alias yarvis -keyalg RSA -keysize 2048 \
+              -validity 10000 -storepass yarvis-community16 -keypass yarvis-community16 \
+              -dname "CN=Yarvis, O=Community16 LLC, C=US"
+            printf '{"message":"llave de la app","content":"%s"}' "$(base64 -w0 "$RUNNER_TEMP/yarvis.jks")" > "$RUNNER_TEMP/subir.json"
+            curl -sf -X PUT -H "Authorization: Bearer $GH_TOKEN" "$API" -d @"$RUNNER_TEMP/subir.json" > /dev/null
+          fi
       - name: Fabricar la app
         working-directory: android
         env:
           VERSION: ${{ github.run_number }}
-        run: gradle assembleDebug --no-daemon
+          LLAVE: ${{ runner.temp }}/yarvis.jks
+          LLAVE_CLAVE: yarvis-community16
+        run: gradle assembleRelease --no-daemon
       - name: Publicar la app en el panel
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           git clone --depth 1 https://x-access-token:${GH_TOKEN}@github.com/ivanjalda/mi-panel.git /tmp/sitio
-          cp android/app/build/outputs/apk/debug/app-debug.apk /tmp/sitio/yarvis.apk
+          cp android/app/build/outputs/apk/release/app-release.apk /tmp/sitio/yarvis.apk
           cd /tmp/sitio
           git config user.name "Yarvis"
           git config user.email "yarvis@users.noreply.github.com"
