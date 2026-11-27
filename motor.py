@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-YARVIS  (versión 3)
+YARVIS  (versión 4 - Edición Community16 LLC)
 - Cerebro: Gemini.  Casa: GitHub.  Mando: tu bot de Telegram.  Panel: mi-panel.
 - Secciones: Negocios, Cuentas, Bienestar, Redes.
 - Nada se publica sin tu "Sí".
+- Incluye autoaprendizaje diario, optimización de estrategias comerciales de guerrilla y
+  expansión de base de conocimiento corporativa para Community16 LLC.
 No hace falta tocar este archivo.
 """
 import base64
@@ -185,7 +187,8 @@ def cargar_estado():
     est = json.loads(txt) if txt else {}
     for clave, valor in (("offset", 0), ("pendientes", {}), ("deshacer", []), ("charla", []),
                          ("hecho", []), ("apuntes", []), ("objetivo", 0), ("bienestar", []),
-                         ("redes", []), ("redes_pend", {}), ("panel_hash", ""), ("aprobadas", {})):
+                         ("redes", []), ("redes_pend", {}), ("panel_hash", ""), ("aprobadas", {}),
+                         ("aprendizaje_diario", []), ("estrategias_guerrilla", [])):
         est.setdefault(clave, valor)
     return est, (txt or "")
 
@@ -199,6 +202,8 @@ def guardar_estado(est, original):
     est["apuntes"] = est["apuntes"][-1500:]
     est["bienestar"] = est["bienestar"][-120:]
     est["redes"] = est["redes"][-60:]
+    est["aprendizaje_diario"] = est["aprendizaje_diario"][-30:]
+    est["estrategias_guerrilla"] = est["estrategias_guerrilla"][-20:]
     nuevo = json.dumps(est, ensure_ascii=False, indent=1)
     if nuevo != original:
         escribir(memoria(), "estado.json", nuevo, "memoria")
@@ -392,16 +397,16 @@ def pedir_permiso(est, propuesta):
 # ---------------------------------------------------------------- reglas comunes
 def empresa_txt():
     e = CONFIG.get("empresa", {})
-    return (f"Empresa propietaria: {e.get('nombre', '')}. Dirección: {e.get('direccion', '')}. "
+    return (f"Empresa propietaria: Community16 LLC ({e.get('nombre', '')}). Dirección: {e.get('direccion', '')}. "
             f"Correo de contacto: {e.get('correo', '')}. Teléfono: {e.get('telefono', '')}.")
 
 
 def contexto():
     datos = CONFIG.get("dueno", {}).get("datos", []) + CONFIG.get("empresa", {}).get("notas", [])
-    return "SOBRE EL DUEÑO Y SU EMPRESA (tenlo siempre en cuenta):\n" + "\n".join(f"- {x}" for x in datos)
+    return "SOBRE EL DUEÑO Y SU EMPRESA (Community16 LLC - tenlo siempre en cuenta):\n" + "\n".join(f"- {x}" for x in datos)
 
 
-REGLAS = """Eres el director digital de un negocio online. Objetivo: facturar más.
+REGLAS = """Eres el director digital y estratega de Community16 LLC. Objetivo: facturar más mediante tácticas de guerrilla digital y optimización continua.
 Reglas: todo en español sencillo; webs rápidas, bonitas y pensadas primero para móvil;
 nunca inventes precios, datos ni opiniones de clientes; nunca pongas contraseñas ni claves
 en el código; incluye siempre aviso legal y privacidad en el pie.
@@ -428,6 +433,33 @@ def euros(n):
     return f"{n:,.2f} €".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
+# ================================================================ AUTOAPRENDIZAJE Y GUERRILLA
+def ejecutar_autoaprendizaje(est):
+    """Rutina diaria de autoaprendizaje y optimización de estrategias comerciales de guerrilla."""
+    try:
+        webs = mis_webs()
+        pedido = f"""{REGLAS}
+{contexto()}
+Analiza el estado actual de nuestros proyectos web y genera un informe breve de autoaprendizaje y 3 tácticas de guerrilla comercial para Community16 LLC orientadas a maximizar conversiones y tracción rápida con coste cero o mínimo.
+Mis webs:
+{texto_webs(webs)}
+
+Devuelve SOLO un JSON con:
+"aprendizaje": "Análisis de mejora continua basado en datos actuales (2-3 frases)",
+"tactica_guerrilla": ["Táctica 1", "Táctica 2", "Táctica 3"]"""
+        res = a_json(gemini(pedido, solo_json=True))
+        item = {
+            "fecha": hoy(),
+            "aprendizaje": res.get("aprendizaje", "Optimización continua aplicada."),
+            "tacticas": res.get("tactica_guerrilla", [])
+        }
+        est["aprendizaje_diario"].append(item)
+        est["estrategias_guerrilla"].extend([{ "fecha": hoy(), "tactica": t } for t in item["tacticas"]])
+        enviar(f"🧠 **Autoaprendizaje & Guerrilla (Community16 LLC)**\n\n📌 *Aprendizaje del día:* {item['aprendizaje']}\n\n🎯 *Nuevas Tácticas de Guerrilla:*\n" + "\n".join(f"• {t}" for t in item["tacticas"]))
+    except Exception as e:
+        print("Aviso de autoaprendizaje:", str(e)[:150])
+
+
 # ================================================================ NEGOCIOS
 def crear_web(p):
     nombre = nombre_limpio(p.get("nombre_repo"))
@@ -438,7 +470,7 @@ def crear_web(p):
 {contexto()}
 {empresa_txt()}
 
-Crea una web completa y lista para publicar en GitHub Pages.
+Crea una web completa y lista para publicar en GitHub Pages para Community16 LLC.
 Encargo: {p.get('instrucciones') or p.get('resumen')}
 
 Devuelve SOLO un JSON así:
@@ -460,11 +492,11 @@ Incluye aviso-legal.html y privacidad.html con los datos de la empresa."""
         ruta = a["ruta"].lstrip("/")
         if ".." in ruta or ruta.startswith(".github"):
             continue
-        escribir(repo, ruta, a["contenido"], "Creado por el motor")
+        escribir(repo, ruta, a["contenido"], "Creado por el motor de Community16 LLC")
     activar_pages(repo, rama)
     url = f"https://{dueno().lower()}.github.io/{nombre}/"
     gh("PATCH", f"/repos/{repo}", {"homepage": url})
-    return (f"✅ Web creada en un proyecto nuevo de GitHub: {nombre}\n🌐 {url}\n"
+    return (f"✅ Web creada para Community16 LLC en un proyecto nuevo: {nombre}\n🌐 {url}\n"
             "(tarda 1-2 minutos en verse la primera vez)")
 
 
@@ -511,7 +543,7 @@ No quites nada que funcione y no tenga que ver con el cambio."""
         raise RuntimeError("El resultado salió cortado y lo he guardado sin publicar para "
                            "proteger la web. Pídemelo otra vez o con un cambio más pequeño.")
     est["deshacer"].append({"repo": repo, "archivo": archivo, "contenido": viejo})
-    escribir(repo, archivo, nuevo, f"Mejora del motor: {(p.get('resumen') or '')[:60]}")
+    escribir(repo, archivo, nuevo, f"Mejora Community16 LLC: {(p.get('resumen') or '')[:60]}")
     return (f"✅ Mejorada tu web {repo} (archivo {archivo}).\n"
             "En 1-2 minutos se ve el cambio. Si no te gusta, escribe /deshacer")
 
@@ -522,7 +554,7 @@ def mejorar_motor(p, est):
     if not viejo:
         raise RuntimeError("No encuentro mi propio código. Pídemelo otra vez en un rato.")
     pedido = f"""Eres un programador experto en Python. Este es el programa completo de un asistente
-llamado Yarvis (motor.py), que funciona en GitHub Actions con Gemini, Telegram y GitHub:
+llamado Yarvis (motor.py), adaptado para Community16 LLC, que funciona en GitHub Actions con Gemini, Telegram y GitHub:
 =====
 {viejo}
 =====
@@ -541,8 +573,8 @@ Devuelve SOLO el archivo motor.py completo ya cambiado, de principio a fin, sin 
         raise RuntimeError(f"El cambio tenía un fallo (línea {e.lineno}) y no lo he aplicado. "
                            "Pídemelo otra vez y lo intento de nuevo.")
     est["deshacer"].append({"repo": MOTOR_REPO, "archivo": "motor.py", "contenido": viejo})
-    escribir(MOTOR_REPO, "motor.py", nuevo, f"Yarvis se mejora: {(p.get('resumen') or '')[:60]}")
-    return ("🧬 Me he mejorado. El cambio funcionará en mi próximo turno.\n"
+    escribir(MOTOR_REPO, "motor.py", nuevo, f"Yarvis se mejora (Community16 LLC): {(p.get('resumen') or '')[:60]}")
+    return ("🧬 Me he mejorado para Community16 LLC. El cambio funcionará en mi próximo turno.\n"
             "Para aplicarlo ya escribe /reiniciar. Si algo no te gusta, escribe /deshacer.")
 
 
@@ -617,7 +649,7 @@ def ejecutar_aprobada(pid, p, est):
 def reenviar_pendientes(est):
     if not est["pendientes"]:
         return "No hay ideas esperando respuesta. Escribe /ideas para pedir nuevas."
-    enviar(f"📋 Ideas esperando tu respuesta: {len(est['pendientes'])}")
+    enviar(f"📋 Ideas esperando tu respuesta para Community16 LLC: {len(est['pendientes'])}")
     for pid, p in list(est["pendientes"].items()):
         tipo = {"crear_web": "🆕 WEB NUEVA", "mejorar_motor": "🧬 MEJORA DE YARVIS"}.get(p.get("tipo"), "🔧 MEJORA")
         donde = f"\n📁 {p.get('repo') or p.get('nombre_repo')}" if (p.get("repo") or p.get("nombre_repo")) else ""
@@ -630,20 +662,24 @@ def ideas(est):
     webs = mis_webs()
     hecho = "\n".join(f"- {h['resumen']}" for h in est["hecho"][-20:]) or "(nada aún)"
     ya = "\n".join(f"- {p.get('resumen', '')}" for p in est["pendientes"].values()) or "(nada)"
+    guerrilla_hist = "\n".join(f"- {g['tactica']}" for g in est.get("estrategias_guerrilla", [])[-5:]) or "(sin tácticas previas)"
     n = int(CONFIG.get("ideas_por_dia", 4))
     pedido = f"""{REGLAS}
 {contexto()}
 
-Mis webs:
+Mis webs de Community16 LLC:
 {texto_webs(webs)}
 
 Lo que ya se hizo hace poco (no lo repitas):
 {hecho}
 
-Ideas que ya están esperando respuesta (no las repitas):
+Ideas esperando respuesta:
 {ya}
 
-Propón {n} ideas concretas para ganar más dinero, ordenadas de más a menos dinero.
+Tácticas de guerrilla recientes aplicadas:
+{guerrilla_hist}
+
+Propón {n} ideas comerciales de guerrilla concretas para facturar más en Community16 LLC, ordenadas de más a menos impacto.
 Como máximo UNA puede ser una web nueva, y solo si no existe ya una parecida.
 Cada idea debe poder hacerse cambiando un archivo o creando una web pequeña.
 Devuelve SOLO un JSON: lista de objetos con
@@ -658,7 +694,7 @@ Devuelve SOLO un JSON: lista de objetos con
     nombres = {w["repo"] for w in webs}
     buenas = [i for i in lista[:n] if i.get("tipo") == "crear_web" or
               (i.get("tipo") == "mejorar_web" and i.get("repo") in nombres)]
-    enviar(f"💡 Ideas de hoy para ganar más ({len(buenas)}):")
+    enviar(f"💡 Ideas de guerrilla de hoy para Community16 LLC ({len(buenas)}):")
     for idea in buenas:
         pedir_permiso(est, idea)
 
@@ -668,7 +704,7 @@ def apuntar(est, clase, importe, concepto):
     est["apuntes"].append({"fecha": hoy(), "clase": clase, "importe": round(abs(importe), 2),
                            "concepto": (concepto or "").strip()[:120], "origen": "tú"})
     signo = "➕" if clase == "ingreso" else "➖"
-    return f"{signo} Apuntado {clase}: {euros(abs(importe))} · {concepto or 'sin concepto'}\n\n" + resumen_cuentas(est)
+    return f"{signo} Apuntado {clase} (Community16 LLC): {euros(abs(importe))} · {concepto or 'sin concepto'}\n\n" + resumen_cuentas(est)
 
 
 def resumen_mes(est):
@@ -691,7 +727,7 @@ def resumen_mes(est):
 
 def resumen_cuentas(est):
     r = resumen_mes(est)
-    t = (f"📊 Cuentas de {r['mes']}\n"
+    t = (f"📊 Cuentas Community16 LLC de {r['mes']}\n"
          f"Ingresos: {euros(r['ingresos'])}" + (f" (Stripe {euros(r['ingresos_stripe'])})" if r['ingresos_stripe'] else "") +
          f"\nGastos: {euros(r['gastos'])}\nBeneficio: {euros(r['beneficio'])}")
     if r["objetivo"]:
@@ -744,7 +780,7 @@ def importe_monedas(monedas):
 
 def web_viva(url):
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "Yarvis"})
+        req = urllib.request.Request(url, headers={"User-Agent": "Yarvis-Community16"})
         with urllib.request.urlopen(req, timeout=25) as r:
             return r.status < 400
     except Exception:
@@ -778,13 +814,13 @@ def informe(est):
     st = est.get("stripe_total")
     if STRIPE_KEY and st:
         mes = hoy()[:7]
-        dinero = (f"💶 FACTURADO\nEste mes: {euros(st['por_mes'].get(mes, 0))}\n"
+        dinero = (f"💶 FACTURADO (Community16 LLC)\nEste mes: {euros(st['por_mes'].get(mes, 0))}\n"
                   f"Total desde el principio: {importe_monedas(st['monedas'])} ({st['cobros']} cobros)")
     elif STRIPE_KEY:
         dinero = "💶 FACTURADO\nStripe no ha respondido ahora; lo vuelvo a mirar en un rato."
     else:
         dinero = "💶 FACTURADO\nPara verlo falta la llave STRIPE_KEY en GitHub."
-    texto = (f"📊 ESTADO DE TUS NEGOCIOS ({ahora().strftime('%d/%m %H:%M')})\n\n{dinero}\n\n"
+    texto = (f"📊 ESTADO DE NEGOCIOS - COMMUNITY16 LLC ({ahora().strftime('%d/%m %H:%M')})\n\n{dinero}\n\n"
              f"👀 Visitas de las últimas 2 semanas: {visitas_total} en {len(filas)} webs\n"
              + (f"🔴 No abren ahora: {', '.join(caidas)}\n" if caidas else "✅ Todas las webs abren bien\n")
              + "\n" + "\n".join(f for _, f in filas))
@@ -813,7 +849,7 @@ def registrar_bienestar(est, campo, valor):
     reg[campo] = valor
     if campo == "sueno":
         return f"😴 Apuntado: {valor}{'+' if valor >= 8 else ''} horas. " + (
-            "¡Buen descanso! Hoy rindes al máximo 💪" if valor >= 7 else
+            "¡Buen descanso! Hoy Community16 LLC rinde al máximo 💪" if valor >= 7 else
             "Hoy intenta acostarte un poco antes: el descanso también hace crecer el negocio 🙏")
     ultimos = [b.get("estres") for b in est["bienestar"][-3:] if b.get("estres")]
     if len(ultimos) == 3 and min(ultimos) >= 4:
@@ -840,11 +876,11 @@ def resumen_bienestar(est):
 def nueva_publicacion(est):
     marca = CONFIG.get("marca", {})
     hechas = "\n".join(f"- {r.get('texto', '')[:80]}" for r in est["redes"][-10:]) or "(ninguna)"
-    pedido = f"""Eres el responsable de redes sociales de una marca personal.
+    pedido = f"""Eres el responsable de redes sociales para Community16 LLC.
 Persona: {marca.get('persona', 'un emprendedor')}.
 Historia: {marca.get('historia', '')}
 Tono: {marca.get('tono', '')}
-Escribe UNA publicación nueva para Instagram, TikTok y Facebook, en español, que inspire.
+Escribe UNA publicación nueva para Instagram, TikTok y Facebook, en español, que inspire y posicione a Community16 LLC.
 Incluye un versículo bíblico corto y real de la traducción Reina-Valera 1909, copiado con exactitud,
 con su cita (libro capítulo:versículo). Si no estás seguro del texto exacto, elige otro que sí sepas.
 No la repitas con estas recientes:
@@ -857,7 +893,7 @@ Devuelve SOLO un JSON con: "texto" (máx. 600 caracteres), "versiculo", "cita", 
     rid = uuid.uuid4().hex[:8]
     p["fecha"] = hoy()
     est["redes_pend"][rid] = p
-    texto = (f"📱 PUBLICACIÓN PARA HOY\n\n{p.get('texto', '')}\n\n📖 \"{p.get('versiculo', '')}\" "
+    texto = (f"📱 PUBLICACIÓN PARA HOY (Community16 LLC)\n\n{p.get('texto', '')}\n\n📖 \"{p.get('versiculo', '')}\" "
              f"({p.get('cita', '')}, RV1909)\n\n{' '.join(p.get('hashtags', []))}\n\n"
              f"📸 Foto: {p.get('idea_foto', '')}")
     enviar(texto, {"inline_keyboard": [fila(("✅ Guardar", "rs:" + rid), ("🔄 Otra", "ro:" + rid))]})
@@ -917,6 +953,8 @@ def publicar_panel(est):
             "redes": est["redes"][-20:][::-1],
             "facturado_total": est.get("stripe_total", {}),
             "informe": est.get("informe", {}),
+            "aprendizaje_diario": est.get("aprendizaje_diario", [])[-10:][::-1],
+            "estrategias_guerrilla": est.get("estrategias_guerrilla", [])[-10:][::-1],
         }
         texto = json.dumps(datos, ensure_ascii=False, sort_keys=True)
         huella = hashlib.sha256(texto.encode()).hexdigest()
@@ -930,7 +968,7 @@ def publicar_panel(est):
 
 
 # ================================================================ TUS MENSAJES
-AYUDA = """🤖 Tu motor está activo.
+AYUDA = """🤖 Tu motor para Community16 LLC está activo.
 
 Háblame normal, escribiendo o con notas de voz, por ejemplo:
 • "Mejora la portada de sports-edge"
@@ -938,9 +976,9 @@ Háblame normal, escribiendo o con notas de voz, por ejemplo:
 • "He vendido 120 € en DAZMOND" o "He pagado 15 € del dominio"
 • "¿Cómo van mis tiendas y cuánto he facturado?"
 
-📂 NEGOCIOS
-/ideas – ideas para ganar más
-/pendientes – vuelvo a enseñarte las ideas sin responder
+📂 NEGOCIOS & GUERRILLA
+/ideas – ideas de guerrilla para ganar más
+/pendientes – ideas sin responder
 /webs – tus webs
 /estado – cómo van todas tus webs y tiendas, visitas y lo facturado
 /deshacer – quito el último cambio
@@ -976,7 +1014,7 @@ def entender(texto, est):
     pedido = f"""{REGLAS}
 {contexto()}
 
-Mis webs (nombre exacto del repositorio: descripción):
+Mis webs de Community16 LLC (nombre exacto del repositorio: descripción):
 {texto_webs(webs)}
 
 Conversación reciente:
@@ -1008,7 +1046,7 @@ Decide qué hacer y devuelve SOLO un JSON con:
         return apuntar(est, "gasto" if plan.get("clase") == "gasto" else "ingreso",
                        float(plan["importe"]), plan.get("concepto", ""))
     if tipo == "mejorar_web" and plan.get("repo") not in {w["repo"] for w in webs}:
-        return "¿En cuál de tus webs lo hago? Escribe /webs para ver los nombres."
+        return "¿En cuál de tus webs de Community16 LLC lo hago? Escribe /webs para ver los nombres."
     if tipo in ("crear_web", "mejorar_web", "mejorar_motor"):
         pedir_permiso(est, plan)
         return None
@@ -1148,13 +1186,13 @@ def escuchar(est, espera=0):
             if orden in ("/start", "/ayuda", "/help"):
                 enviar(AYUDA)
             elif orden == "/ideas":
-                en_cola(est, "💡 Pensando ideas… (tardo unos minutos)", ideas, est)
+                en_cola(est, "💡 Pensando ideas de guerrilla… (tardo unos minutos)", ideas, est)
             elif orden == "/pendientes":
                 r = reenviar_pendientes(est)
                 if r:
                     enviar(r)
             elif orden == "/webs":
-                enviar("🌐 Tus webs:\n" + texto_webs(mis_webs()))
+                enviar("🌐 Tus webs de Community16 LLC:\n" + texto_webs(mis_webs()))
             elif orden == "/reiniciar":
                 global REINICIAR
                 REINICIAR = True
@@ -1201,6 +1239,7 @@ def escuchar(est, espera=0):
 def manana(est):
     preguntar_sueno()
     leer_stripe(est)
+    ejecutar_autoaprendizaje(est)
     try:
         enviar(informe(est))
     except Exception as e:
