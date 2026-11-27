@@ -406,11 +406,11 @@ def contexto():
     return "SOBRE EL DUEÑO Y SU EMPRESA (Community16 LLC - tenlo siempre en cuenta):\n" + "\n".join(f"- {x}" for x in datos)
 
 
-REGLAS = """Eres el director digital y estratega de Community16 LLC. Objetivo: facturar más mediante tácticas de guerrilla digital y optimización continua.
-Reglas: todo en español sencillo; webs rápidas, bonitas y pensadas primero para móvil;
+REGLAS = """Eres el director digital y estratega avanzado de Community16 LLC. Objetivo: maximizar conversiones y facturación mediante tácticas de guerrilla digital de alta conversión y optimización continua de embudos de venta.
+Reglas: todo en español sencillo; webs ultrarrápidas, atractivas y optimizadas para conversión móvil;
 nunca inventes precios, datos ni opiniones de clientes; nunca pongas contraseñas ni claves
 en el código; incluye siempre aviso legal y privacidad en el pie.
-Antes de proponer una web nueva, mira la lista de webs: si ya existe una parecida, propón mejorarla."""
+Antes de proponer una web nueva, mira la lista de webs: si ya existe una parecida, propón mejorar su conversión."""
 
 
 def texto_webs(webs):
@@ -433,29 +433,29 @@ def euros(n):
     return f"{n:,.2f} €".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
-# ================================================================ AUTOAPRENDIZAJE Y GUERRILLA
+# ================================================================ AUTOAPRENDIZAJE Y GUERRILLA AVANZADA
 def ejecutar_autoaprendizaje(est):
-    """Rutina diaria de autoaprendizaje y optimización de estrategias comerciales de guerrilla."""
+    """Rutina diaria avanzada de autoaprendizaje, análisis de conversión y optimización comercial de guerrilla."""
     try:
         webs = mis_webs()
         pedido = f"""{REGLAS}
 {contexto()}
-Analiza el estado actual de nuestros proyectos web y genera un informe breve de autoaprendizaje y 3 tácticas de guerrilla comercial para Community16 LLC orientadas a maximizar conversiones y tracción rápida con coste cero o mínimo.
+Realiza un análisis avanzado de conversión y rendimiento de nuestras plataformas digitales para Community16 LLC. Identifica puntos de fricción, genera un informe estratégico de autoaprendizaje y propón 3 tácticas punteras de guerrilla digital orientadas a captación agresiva y conversión con coste cero.
 Mis webs:
 {texto_webs(webs)}
 
 Devuelve SOLO un JSON con:
-"aprendizaje": "Análisis de mejora continua basado en datos actuales (2-3 frases)",
-"tactica_guerrilla": ["Táctica 1", "Táctica 2", "Táctica 3"]"""
+"aprendizaje": "Análisis estratégico profundo y optimización de conversión basada en datos de proyectos (2-3 frases)",
+"tactica_guerrilla": ["Táctica avanzada 1", "Táctica avanzada 2", "Táctica avanzada 3"]"""
         res = a_json(gemini(pedido, solo_json=True))
         item = {
             "fecha": hoy(),
-            "aprendizaje": res.get("aprendizaje", "Optimización continua aplicada."),
+            "aprendizaje": res.get("aprendizaje", "Optimización avanzada de conversión aplicada."),
             "tacticas": res.get("tactica_guerrilla", [])
         }
         est["aprendizaje_diario"].append(item)
         est["estrategias_guerrilla"].extend([{ "fecha": hoy(), "tactica": t } for t in item["tacticas"]])
-        enviar(f"🧠 **Autoaprendizaje & Guerrilla (Community16 LLC)**\n\n📌 *Aprendizaje del día:* {item['aprendizaje']}\n\n🎯 *Nuevas Tácticas de Guerrilla:*\n" + "\n".join(f"• {t}" for t in item["tacticas"]))
+        enviar(f"🧠 **Autoaprendizaje & Guerrilla Avanzada (Community16 LLC)**\n\n📌 *Análisis de Conversión:* {item['aprendizaje']}\n\n🎯 *Nuevas Tácticas de Crecimiento:*\n" + "\n".join(f"• {t}" for t in item["tacticas"]))
     except Exception as e:
         print("Aviso de autoaprendizaje:", str(e)[:150])
 
@@ -470,13 +470,13 @@ def crear_web(p):
 {contexto()}
 {empresa_txt()}
 
-Crea una web completa y lista para publicar en GitHub Pages para Community16 LLC.
+Crea una web completa, optimizada para conversión y lista para publicar en GitHub Pages para Community16 LLC.
 Encargo: {p.get('instrucciones') or p.get('resumen')}
 
 Devuelve SOLO un JSON así:
 {{"archivos": [{{"ruta": "index.html", "contenido": "..."}}]}}
-Como máximo 6 archivos. Obligatorio index.html. Sin imágenes binarias (usa emojis, SVG o CSS).
-Incluye aviso-legal.html y privacidad.html con los datos de la empresa."""
+Como máximo 6 archivos. Obligatorio index.html. Sin imágenes binarias (usa emojis, SVG modernos o CSS).
+Incluye llamadas a la acción claras (CTA), aviso-legal.html y privacidad.html con los datos de la empresa."""
     res = a_json(gemini(pedido, solo_json=True))
     archivos = [a for a in res.get("archivos", [])
                 if isinstance(a, dict) and a.get("ruta") and a.get("contenido")]
@@ -492,11 +492,11 @@ Incluye aviso-legal.html y privacidad.html con los datos de la empresa."""
         ruta = a["ruta"].lstrip("/")
         if ".." in ruta or ruta.startswith(".github"):
             continue
-        escribir(repo, ruta, a["contenido"], "Creado por el motor de Community16 LLC")
+        escribir(repo, ruta, a["contenido"], "Creado por el motor avanzado de Community16 LLC")
     activar_pages(repo, rama)
     url = f"https://{dueno().lower()}.github.io/{nombre}/"
     gh("PATCH", f"/repos/{repo}", {"homepage": url})
-    return (f"✅ Web creada para Community16 LLC en un proyecto nuevo: {nombre}\n🌐 {url}\n"
+    return (f"✅ Web optimizada creada para Community16 LLC en un proyecto nuevo: {nombre}\n🌐 {url}\n"
             "(tarda 1-2 minutos en verse la primera vez)")
 
 
@@ -509,7 +509,7 @@ def elegir_archivo(repo, instrucciones):
         return "index.html"
     pedido = ("Archivos de la web:\n" + "\n".join(archivos[:300]) +
               f"\n\nEncargo: {instrucciones}\n"
-              "¿Qué UN archivo hay que cambiar? Responde SOLO un JSON: {\"archivo\": \"ruta\"}")
+              "¿Qué UN archivo hay que cambiar para maximizar la conversión? Responde SOLO un JSON: {\"archivo\": \"ruta\"}")
     elegido = a_json(gemini(pedido, solo_json=True)).get("archivo")
     return elegido if elegido in archivos else ("index.html" if "index.html" in archivos else None)
 
@@ -534,17 +534,17 @@ Este es el archivo "{archivo}" de la web "{repo}":
 =====
 {viejo}
 =====
-Cambio que hay que hacer: {p.get('instrucciones') or p.get('resumen')}
+Cambio orientado a conversión que hay que hacer: {p.get('instrucciones') or p.get('resumen')}
 
 Devuelve SOLO el archivo completo ya cambiado, de principio a fin, sin explicaciones.
-No quites nada que funcione y no tenga que ver con el cambio."""
+No quites nada que funcione y mejora los elementos de llamada a la acción y diseño móvil."""
     nuevo = quitar_vallas(gemini(pedido))
     if len(nuevo) < len(viejo) * 0.6:
         raise RuntimeError("El resultado salió cortado y lo he guardado sin publicar para "
                            "proteger la web. Pídemelo otra vez o con un cambio más pequeño.")
     est["deshacer"].append({"repo": repo, "archivo": archivo, "contenido": viejo})
-    escribir(repo, archivo, nuevo, f"Mejora Community16 LLC: {(p.get('resumen') or '')[:60]}")
-    return (f"✅ Mejorada tu web {repo} (archivo {archivo}).\n"
+    escribir(repo, archivo, nuevo, f"Optimización conversión Community16 LLC: {(p.get('resumen') or '')[:60]}")
+    return (f"✅ Optimizada tu web {repo} (archivo {archivo}).\n"
             "En 1-2 minutos se ve el cambio. Si no te gusta, escribe /deshacer")
 
 
@@ -553,7 +553,7 @@ def mejorar_motor(p, est):
     viejo, _ = leer(MOTOR_REPO, "motor.py")
     if not viejo:
         raise RuntimeError("No encuentro mi propio código. Pídemelo otra vez en un rato.")
-    pedido = f"""Eres un programador experto en Python. Este es el programa completo de un asistente
+    pedido = f"""Eres un programador experto en Python y arquitecto de sistemas de IA. Este es el programa completo de un asistente
 llamado Yarvis (motor.py), adaptado para Community16 LLC, que funciona en GitHub Actions con Gemini, Telegram y GitHub:
 =====
 {viejo}
@@ -573,8 +573,8 @@ Devuelve SOLO el archivo motor.py completo ya cambiado, de principio a fin, sin 
         raise RuntimeError(f"El cambio tenía un fallo (línea {e.lineno}) y no lo he aplicado. "
                            "Pídemelo otra vez y lo intento de nuevo.")
     est["deshacer"].append({"repo": MOTOR_REPO, "archivo": "motor.py", "contenido": viejo})
-    escribir(MOTOR_REPO, "motor.py", nuevo, f"Yarvis se mejora (Community16 LLC): {(p.get('resumen') or '')[:60]}")
-    return ("🧬 Me he mejorado para Community16 LLC. El cambio funcionará en mi próximo turno.\n"
+    escribir(MOTOR_REPO, "motor.py", nuevo, f"Yarvis se actualiza (Community16 LLC): {(p.get('resumen') or '')[:60]}")
+    return ("🧬 Me he actualizado con nuevos sistemas avanzados para Community16 LLC. El cambio funcionará en mi próximo turno.\n"
             "Para aplicarlo ya escribe /reiniciar. Si algo no te gusta, escribe /deshacer.")
 
 
@@ -679,22 +679,22 @@ Ideas esperando respuesta:
 Tácticas de guerrilla recientes aplicadas:
 {guerrilla_hist}
 
-Propón {n} ideas comerciales de guerrilla concretas para facturar más en Community16 LLC, ordenadas de más a menos impacto.
+Propón {n} ideas comerciales de guerrilla altamente efectivas para maximizar conversiones y facturación en Community16 LLC, ordenadas de más a menos impacto.
 Como máximo UNA puede ser una web nueva, y solo si no existe ya una parecida.
-Cada idea debe poder hacerse cambiando un archivo o creando una web pequeña.
+Cada idea debe poder hacerse optimizando un archivo o creando una solución ligera de alta conversión.
 Devuelve SOLO un JSON: lista de objetos con
 "tipo": "mejorar_web" o "crear_web",
 "repo": nombre exacto del repositorio (solo si es mejora),
 "nombre_repo": nombre corto en minúsculas con guiones (solo si es web nueva),
-"resumen": 2-3 frases sencillas: qué es y por qué dará dinero,
-"instrucciones": encargo detallado para quien lo programe."""
+"resumen": 2-3 frases sencillas: qué es y por qué aumentará las ventas,
+"instrucciones": encargo detallado orientado a conversión para quien lo programe."""
     lista = a_json(gemini(pedido, solo_json=True))
     if isinstance(lista, dict):
         lista = lista.get("ideas", [])
     nombres = {w["repo"] for w in webs}
     buenas = [i for i in lista[:n] if i.get("tipo") == "crear_web" or
               (i.get("tipo") == "mejorar_web" and i.get("repo") in nombres)]
-    enviar(f"💡 Ideas de guerrilla de hoy para Community16 LLC ({len(buenas)}):")
+    enviar(f"💡 Ideas de guerrilla y conversión de hoy para Community16 LLC ({len(buenas)}):")
     for idea in buenas:
         pedir_permiso(est, idea)
 
@@ -876,13 +876,13 @@ def resumen_bienestar(est):
 def nueva_publicacion(est):
     marca = CONFIG.get("marca", {})
     hechas = "\n".join(f"- {r.get('texto', '')[:80]}" for r in est["redes"][-10:]) or "(ninguna)"
-    pedido = f"""Eres el responsable de redes sociales para Community16 LLC.
+    pedido = f"""Eres el responsable de marketing y redes sociales para Community16 LLC.
 Persona: {marca.get('persona', 'un emprendedor')}.
 Historia: {marca.get('historia', '')}
 Tono: {marca.get('tono', '')}
-Escribe UNA publicación nueva para Instagram, TikTok y Facebook, en español, que inspire y posicione a Community16 LLC.
+Escribe UNA publicación nueva de alto impacto para Instagram, TikTok y Facebook, en español, orientada a inspirar, generar autoridad y posicionar los negocios de Community16 LLC.
 Incluye un versículo bíblico corto y real de la traducción Reina-Valera 1909, copiado con exactitud,
-con su cita (libro capítulo:versículo). Si no estás seguro del texto exacto, elige otro que sí sepas.
+con su cita (libro capítulo:versículo). Si não estás seguro del texto exacto, elige otro que sí sepas.
 No la repitas con estas recientes:
 {hechas}
 Devuelve SOLO un JSON con: "texto" (máx. 600 caracteres), "versiculo", "cita", "hashtags" (lista de 6),
@@ -968,16 +968,16 @@ def publicar_panel(est):
 
 
 # ================================================================ TUS MENSAJES
-AYUDA = """🤖 Tu motor para Community16 LLC está activo.
+AYUDA = """🤖 Tu motor avanzado para Community16 LLC está activo.
 
 Háblame normal, escribiendo o con notas de voz, por ejemplo:
-• "Mejora la portada de sports-edge"
+• "Mejora la conversión de la portada en sports-edge"
 • "Crea una web de recetas fáciles con afiliados"
 • "He vendido 120 € en DAZMOND" o "He pagado 15 € del dominio"
 • "¿Cómo van mis tiendas y cuánto he facturado?"
 
 📂 NEGOCIOS & GUERRILLA
-/ideas – ideas de guerrilla para ganar más
+/ideas – ideas de guerrilla y conversión para ganar más
 /pendientes – ideas sin responder
 /webs – tus webs
 /estado – cómo van todas tus webs y tiendas, visitas y lo facturado
@@ -1034,7 +1034,7 @@ Decide qué hacer y devuelve SOLO un JSON con:
 "archivo": archivo a cambiar si lo sabes (si no, vacío),
 "nombre_repo": nombre corto en minúsculas con guiones (si es web nueva),
 "clase": "ingreso" o "gasto" (si es apunte), "importe": número (si es apunte), "concepto": texto corto,
-"resumen": 2-3 frases sencillas de lo que vas a hacer,
+"resumen": 2-3 frases sencillas de lo que vas a hacer orientado a conversión,
 "instrucciones": encargo detallado para quien lo programe."""
     plan = a_json(gemini(pedido, solo_json=True))
     if isinstance(plan, list):
@@ -1186,7 +1186,7 @@ def escuchar(est, espera=0):
             if orden in ("/start", "/ayuda", "/help"):
                 enviar(AYUDA)
             elif orden == "/ideas":
-                en_cola(est, "💡 Pensando ideas de guerrilla… (tardo unos minutos)", ideas, est)
+                en_cola(est, "💡 Pensando ideas de guerrilla y conversión… (tardo unos minutos)", ideas, est)
             elif orden == "/pendientes":
                 r = reenviar_pendientes(est)
                 if r:
